@@ -16,8 +16,12 @@
 #define INDEX_END  0xFF8
 #define RTE_MAP_SIZE  0xFFF
 #define CTE_MAP_SIZE  0xFFF
+#define PASIDDIRTE_MAP_SIZE  0xFFF
+#define PASIDTE_MAP_SIZE  0xFFF
 
 #define INDEX_OFFSET(val)  (val / 4)
+#define PASIDDIR_INDEX(val)  (val * 2)
+#define PASID_INDEX(val)  (val * 16)
 
 #define PRESENT_BIT(x)  (x & 0x1)
 
@@ -28,13 +32,17 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
         int *start;
         unsigned int *rte_val_va = NULL;
         unsigned int *sm_cte_val_va = NULL;
+        unsigned int *sm_pasiddirte_addr_va = NULL;
         unsigned int *sm_pasidte_addr_va = NULL;
 
         rte_val_va = (unsigned int *)(0x5AA66000);
         sm_cte_val_va = (unsigned int *)(0x6AA66000);
+        sm_pasiddirte_addr_va = (unsigned int *)(0x1AA66000);
+        sm_pasidte_addr_va = (unsigned int *)(0x2AA66000);
 
         unsigned long long int SM_CTP;
         unsigned long long int PASIDDIRPTR;
+        unsigned long long int PASIDPTR;
 
         printf("rte val = %#llx\n", rte_val);
 
@@ -50,9 +58,11 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
         if (dev_num_val <= 0xF && dev_num_val >= 0)
         {
                 printf("dev_num <= 0xF(15) Using LCTP and SM Lower Context Table\n");
-                printf("Root Table Entry bus %#x Offset=%#x, [63-0]:0x%08x%08x [127-64]:0x%08x%08x\n",
+                printf("Root Table Entry bus %#x Offset=%#x,   [63-0]:0x%08x%08x\n",
                         bus_num_val, bus_num_val * 2 * 8,
-                        rte_val_va[1 + INDEX_OFFSET(bus_num_val * 0x10)], rte_val_va[0 + INDEX_OFFSET(bus_num_val * 0x10)],
+                        rte_val_va[1 + INDEX_OFFSET(bus_num_val * 0x10)], rte_val_va[0 + INDEX_OFFSET(bus_num_val * 0x10)]);
+                printf("Root Table Entry bus %#x Offset=%#x, [127-64]:0x%08x%08x\n",
+                        bus_num_val, bus_num_val * 2 * 8,
                         rte_val_va[3 + INDEX_OFFSET(bus_num_val * 0x10)], rte_val_va[2 + INDEX_OFFSET(bus_num_val * 0x10)]);
 
                 SM_CTP = (unsigned long long int)rte_val_va[1 + INDEX_OFFSET(bus_num_val * 0x10)] << 32 |
@@ -113,9 +123,9 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
         }
 
         int offset_sm_context = dev_num_val << 8 | func_num_val << 5;
-        printf("sm context entry dev:0x%x func:%d [63-0]:0x%08x%08x\n",
+        printf("sm context entry dev:0x%x func:%d    [63-0]:0x%08x%08x\n",
                dev_num_val, func_num_val, sm_cte_val_va[1 + offset_sm_context / 8], sm_cte_val_va[0 + offset_sm_context / 8]);
-        printf("sm context entry dev:0x%x func:%d [127-64]:0x%08x%08x\n",
+        printf("sm context entry dev:0x%x func:%d  [127-64]:0x%08x%08x\n",
                dev_num_val, func_num_val, sm_cte_val_va[3 + offset_sm_context / 8], sm_cte_val_va[2 + offset_sm_context / 8]);
         printf("sm context entry dev:0x%x func:%d [191-128]:0x%08x%08x\n",
                dev_num_val, func_num_val, sm_cte_val_va[5 + offset_sm_context / 8], sm_cte_val_va[4 + offset_sm_context / 8]);
@@ -125,7 +135,7 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
         PASIDDIRPTR = (unsigned long long int)sm_cte_val_va[1 + offset_sm_context / 8] << 32 |
                                                 sm_cte_val_va[0 + offset_sm_context / 8];
 
-        printf("PASIDDIRPTR=%#llx\n ", PASIDDIRPTR);
+        printf("PASIDDIRPTR=%#llx\n", PASIDDIRPTR);
 
         if (PRESENT_BIT(PASIDDIRPTR) == 0)
         {
@@ -142,7 +152,80 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
         if (munmap(sm_cte_val_va, RTE_MAP_SIZE) == -1)
                 printf("rte_val_va munmap error\n");
 
-        if (pasid_val !=0)
+        if (pasid_val ==0)
+                goto pasid_zero;
+
+        int pasid_val_0_5 = pasid_val & 0x3F;
+        int pasid_val_6_19 = pasid_val >> 6;
+
+        if (pasid_val_6_19 != 0)
+        {
+                start = (int *)mmap(sm_pasiddirte_addr_va, PASIDDIRTE_MAP_SIZE,
+                                    PROT_READ | PROT_WRITE, MAP_SHARED, fd, PASIDDIRPTR);
+
+                if (start < 0)
+                {
+                        printf("sm_pasiddirte_addr_va mmap failed in %s\n", __func__);
+                        return -1;
+                }
+                printf("pasid directory entry pasid_val_6_19:%#x, [63-0]:0x%08x%08x\n", pasid_val_6_19,
+                        sm_pasiddirte_addr_va[1 + PASIDDIR_INDEX(pasid_val_6_19)],
+                        sm_pasiddirte_addr_va[0 + PASIDDIR_INDEX(pasid_val_6_19)]);
+
+        }
+
+        PASIDPTR = (unsigned long long int)sm_pasiddirte_addr_va[1 + PASIDDIR_INDEX(pasid_val_6_19)] << 32 |
+                        sm_pasiddirte_addr_va[0 + PASIDDIR_INDEX(pasid_val_6_19)];
+
+        printf("PASIDPTR=%#llx\n", PASIDPTR);
+
+        if (PRESENT_BIT(PASIDPTR) == 0)
+        {
+                if (munmap(sm_pasiddirte_addr_va, PASIDDIRTE_MAP_SIZE) == -1)
+                        printf("sm_pasiddirte_addr_va");
+
+                printf("Scalable Mode Pasid Directory Entry not present\n");
+                return -3;
+        }
+
+        PASIDPTR >>= 12;
+        PASIDPTR <<= 12;
+
+        if (munmap(sm_pasiddirte_addr_va, PASIDDIRTE_MAP_SIZE) == -1)
+                printf("sm_pasiddirte_addr_va");
+
+        if (pasid_val_0_5 != 0)
+        {
+                start = (int *)mmap(sm_pasidte_addr_va, PASIDTE_MAP_SIZE,
+                                    PROT_READ | PROT_WRITE, MAP_SHARED, fd, PASIDPTR);
+                if (start < 0)
+                {
+                        printf("sm_pasidte_addr_va mmap failed in %s\n", __func__);
+                        return -1;
+                }
+                printf("pasid entry pasid_val_0_5:%#x    [63-0]:0x%08x%08x\n", pasid_val_0_5,
+                       sm_pasidte_addr_va[1 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[0 + PASID_INDEX(pasid_val_0_5)]);
+                printf("pasid entry pasid_val_0_5:%#x  [127-64]:0x%08x%08x\n", pasid_val_0_5,
+                       sm_pasidte_addr_va[3 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[2 + PASID_INDEX(pasid_val_0_5)]);
+                printf("pasid entry pasid_val_0_5:%#x [191-128]:0x%08x%08x\n", pasid_val_0_5,
+                       sm_pasidte_addr_va[5 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[4 + PASID_INDEX(pasid_val_0_5)]);
+                printf("pasid entry pasid_val_0_5:%#x [255-192]:0x%08x%08x\n", pasid_val_0_5,
+                       sm_pasidte_addr_va[7 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[6 + PASID_INDEX(pasid_val_0_5)]);
+                printf("pasid entry pasid_val_0_5:%#x [319-256]:0x%08x%08x\n", pasid_val_0_5,
+                       sm_pasidte_addr_va[9 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[8 + PASID_INDEX(pasid_val_0_5)]);
+                printf("pasid entry pasid_val_0_5:%#x [383-320]:0x%08x%08x\n", pasid_val_0_5,
+                       sm_pasidte_addr_va[11 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[10 + PASID_INDEX(pasid_val_0_5)]);
+                printf("pasid entry pasid_val_0_5:%#x [447-384]:0x%08x%08x\n", pasid_val_0_5,
+                       sm_pasidte_addr_va[13 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[12 + PASID_INDEX(pasid_val_0_5)]);
+                printf("pasid entry pasid_val_0_5:%#x [511-448]:0x%08x%08x\n", pasid_val_0_5,
+                       sm_pasidte_addr_va[15 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[14 + PASID_INDEX(pasid_val_0_5)]);
+
+        }
+
+        return 0;
+
+pasid_zero:
+        printf("input pasid is zero\n");
 
         return 0;
 }
