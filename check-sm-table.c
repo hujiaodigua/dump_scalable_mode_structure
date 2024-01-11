@@ -48,6 +48,165 @@
 
 #define PRESENT_BIT(x)  (x & 0x1)
 
+int walk_page_structure_entry(unsigned long long int SLPTPTR_val,
+		              unsigned long long int input_va_val, int fd)
+{
+	int bit0_11 = PML4_PAGE_OFFSET(input_va_val);   // page offset
+	int bit12_20 = PML4_4th_OFFSET(input_va_val);  // forth offset
+	int bit21_29 = PML4_3rd_OFFSET(input_va_val);  // third offset
+	int bit30_39 = PML4_2nd_OFFSET(input_va_val);  // second offset
+	int bit39_47 = PML4_1st_OFFSET(input_va_val);  // first offset
+	unsigned long long int SLPTPTR_1level;
+        unsigned long long int SLPTPTR_2level;
+        unsigned long long int SLPTPTR_3level;
+        unsigned long long int SLPTPTR_4level;
+
+	unsigned int *slp_addr_va = NULL;
+        unsigned int *slp_addr_2nd_va = NULL;
+        unsigned int *slp_addr_3rd_va = NULL;
+        unsigned int *slp_addr_4th_va = NULL;
+	int *start;
+
+	slp_addr_va = (unsigned int *)(0x7AA66000);
+
+	printf("input va: %#llx\n", input_va_val);
+	printf("page offset bit0_11: %#x\n", bit0_11);
+	printf("4th offset bit12_20: %#x\n", bit12_20);
+	printf("3rd offset bit21_29: %#x\n", bit21_29);
+	printf("2nd offset bit30_39: %#x\n", bit30_39);
+	printf("1st offset bit39_47: %#x\n", bit39_47);
+
+	start = (int *)mmap(slp_addr_va, SL_1st_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SLPTPTR_val);
+	if (start < 0)
+        {
+		printf("slp_addr_va mmap failed in %s\n", __func__);
+		return -1;
+        }
+
+        printf("===start walk second pml4 table structure===\n");
+	printf("1st offset: %#x, pointer val: 0x%08x%08x\n", bit39_47,
+			slp_addr_va[1 + INDEX_OFFSET(bit39_47)], slp_addr_va[0 + INDEX_OFFSET(bit39_47)]);
+
+        SLPTPTR_1level = (unsigned long long int)slp_addr_va[1 + INDEX_OFFSET(bit39_47)] << 32
+                        | slp_addr_va[0 + INDEX_OFFSET(bit39_47)];
+
+        if (munmap(slp_addr_va, SL_1st_MAP_SIZE) == -1)
+                printf("slp_addr_va munmap error\n");
+
+        if (PRESENT_BIT(SLPTPTR_1level) == 0)
+                goto entry_not_present;
+
+        SLPTPTR_1level >>= 12;
+        SLPTPTR_1level <<= 12;
+        printf("SLPTPTR_1level=0x%llx\n", SLPTPTR_1level);
+
+        if (SLPTPTR_1level == 0)
+                goto addr_0_err;
+
+        slp_addr_2nd_va = (unsigned int *)(0x8AA66000);
+
+        start = (int *)mmap(slp_addr_2nd_va, SL_2nd_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SLPTPTR_1level);
+	if (start < 0)
+        {
+		printf("slp_addr_2nd_va mmap failed in %s\n", __func__);
+		return -1;
+        }
+
+        printf("2nd offset: %#x, pointer val: 0x%08x%08x\n", bit30_39,
+              slp_addr_2nd_va[1 + INDEX_OFFSET(bit30_39)], slp_addr_2nd_va[0 + INDEX_OFFSET(bit30_39)]);
+
+        SLPTPTR_2level = (unsigned long long int)slp_addr_2nd_va[1 + INDEX_OFFSET(bit30_39)] << 32
+                        | slp_addr_2nd_va[0 + INDEX_OFFSET(bit30_39)];
+
+        if (munmap(slp_addr_2nd_va, SL_2nd_MAP_SIZE) == -1)
+                printf("slp_addr_2nd_va munmap error\n");
+
+        if (HUGEPAGE_BIT(SLPTPTR_2level) == 1)
+                goto GB_HUGEPAGE;
+        if (PRESENT_BIT(SLPTPTR_2level) == 0)
+                goto entry_not_present;
+
+        SLPTPTR_2level >>= 12;
+        SLPTPTR_2level <<= 12;
+        printf("SLPTPTR_2level=0x%llx\n", SLPTPTR_2level);
+
+        if (SLPTPTR_2level == 0)
+                goto addr_0_err;
+
+        slp_addr_3rd_va = (unsigned int *)(0x9AA66000);
+        start = (int *)mmap(slp_addr_3rd_va, SL_3rd_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SLPTPTR_2level);
+        if (start < 0)
+        {
+                printf("slp_addr_3rd_va mmap failed in %s\n", __func__);
+                return -1;
+        }
+
+        printf("3rd offset: %#x, pointer val: 0x%08x%08x\n", bit21_29,
+              slp_addr_3rd_va[1 + INDEX_OFFSET(bit21_29)], slp_addr_3rd_va[0 + INDEX_OFFSET(bit21_29)]);
+        SLPTPTR_3level = (unsigned long long int)slp_addr_3rd_va[1 + INDEX_OFFSET(bit21_29)] << 32
+                        | slp_addr_3rd_va[0 + INDEX_OFFSET(bit21_29)];
+
+        if (munmap(slp_addr_3rd_va, SL_3rd_MAP_SIZE) == -1)
+                printf("slp_addr_3rd_va munmap error\n");
+
+        if (HUGEPAGE_BIT(SLPTPTR_3level) == 1)
+                goto MB_HUGEPAGE;
+        if (PRESENT_BIT(SLPTPTR_3level) == 0)
+                goto entry_not_present;
+
+        SLPTPTR_3level >>= 12;
+        SLPTPTR_3level <<= 12;
+        printf("SLPTPTR_3level=0x%llx\n", SLPTPTR_3level);
+
+        if (SLPTPTR_3level == 0)
+                goto addr_0_err;
+
+        slp_addr_4th_va = (unsigned int *)(0xaAA66000);
+        start = (int *)mmap(slp_addr_4th_va, SL_4th_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SLPTPTR_3level);
+        if (start < 0)
+        {
+                printf("slp_addr_4th_va mmap failed in %s\n", __func__);
+                return -1;
+        }
+
+        printf("4th offset: %#x, pointer val: 0x%08x%08x\n", bit12_20,
+              slp_addr_4th_va[1 + INDEX_OFFSET(bit12_20)], slp_addr_4th_va[0 + INDEX_OFFSET(bit12_20)]);
+        SLPTPTR_4level = (unsigned long long int)slp_addr_4th_va[1 + INDEX_OFFSET(bit12_20)] << 32
+                        | slp_addr_4th_va[0 + INDEX_OFFSET(bit12_20)];
+
+        if (munmap(slp_addr_4th_va, SL_4th_MAP_SIZE) == -1)
+                printf("slp_addr_4th_va munmap errpr\n");
+
+        if (PRESENT_BIT(SLPTPTR_4level) == 0)
+                goto entry_not_present;
+
+        SLPTPTR_4level >>= 12;
+        SLPTPTR_4level <<=12;
+        printf("SLPTPTR_4level=0x%llx\n", SLPTPTR_4level);
+
+        if (SLPTPTR_4level == 0)
+                goto addr_0_err;
+
+
+        return 0;
+
+addr_0_err:
+        printf("this level addr pointer is 0!!\n");
+        return -2;
+
+entry_not_present:
+        printf("this entry not present\n");
+        return -3;
+
+GB_HUGEPAGE:
+        printf("Used 1GB Huge Page\n");
+        return 0;
+
+MB_HUGEPAGE:
+        printf("Used 2MB Huge Page\n");
+        return 0;
+}
+
 int walk_first_page_structure_entry(unsigned long long int FLPTPTR_val,
 		              unsigned long long int input_va_val, int fd)
 {
@@ -435,6 +594,7 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                 if (SLPTPTR != 0)
                 {
                         printf("SLPTPTR=0x%llx\n", SLPTPTR);
+                        ret = walk_page_structure_entry(SLPTPTR, guest_addr_val, fd);
                 }
         }
 
