@@ -481,6 +481,12 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
 
         printf("PASIDDIRPTR=%#llx\n", PASIDDIRPTR);
 
+        unsigned long long int rid_pasid_val = (unsigned long long int)sm_cte_val_va[3 + offset_sm_context / 8]  << 32 |
+                                                sm_cte_val_va[2 + offset_sm_context / 8];
+        rid_pasid_val &= 0xFFFFF;
+        if (rid_pasid_val != 0)
+                printf("this device used RID_PASID, rid_pasid_val=0x%llx(%lld)\n", rid_pasid_val, rid_pasid_val);
+
         if (PRESENT_BIT(PASIDDIRPTR) == 0)
         {
                 if (munmap(sm_cte_val_va, RTE_MAP_SIZE) == -1)
@@ -512,6 +518,7 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                         printf("sm_pasiddirte_addr_va mmap failed in %s\n", __func__);
                         return -1;
                 }
+                printf("===Used Scalable Mode Pasid Directory Entry===\n");
                 printf("pasid directory entry pasid_val_6_19:%#x, [63-0]:0x%08x%08x\n", pasid_val_6_19,
                         sm_pasiddirte_addr_va[1 + PASIDDIR_INDEX(pasid_val_6_19)],
                         sm_pasiddirte_addr_va[0 + PASIDDIR_INDEX(pasid_val_6_19)]);
@@ -547,6 +554,7 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                         printf("sm_pasidte_addr_va mmap failed in %s\n", __func__);
                         return -1;
                 }
+                printf("===Used Scalable Mode Pasod Entry===\n");
                 printf("pasid entry pasid_val_0_5:%#x    [63-0]:0x%08x%08x\n", pasid_val_0_5,
                        sm_pasidte_addr_va[1 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[0 + PASID_INDEX(pasid_val_0_5)]);
                 printf("pasid entry pasid_val_0_5:%#x  [127-64]:0x%08x%08x\n", pasid_val_0_5,
