@@ -667,5 +667,11 @@ int main(int argc, char* argv[], char* envp[])
                                       input_pasid_val, input_bus_num,
                                       input_dev_num, input_func_num, input_rte_addr);
 
+        if (ret == -2)
+                goto close;
+
+close:
+        close(file_device);
+
         return ret;
 }
