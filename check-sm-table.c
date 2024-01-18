@@ -365,6 +365,232 @@ MB_HUGEPAGE:
         return 0;
 }
 
+unsigned long long int walk_neste_second_page_structure_entry(unsigned long long int SLPTPTR_val,
+		              unsigned long long int input_va_val, int fd)
+{
+	int bit0_11 = PML4_PAGE_OFFSET(input_va_val);   // page offset
+	int bit12_20 = PML4_4th_OFFSET(input_va_val);  // forth offset
+	int bit21_29 = PML4_3rd_OFFSET(input_va_val);  // third offset
+	int bit30_39 = PML4_2nd_OFFSET(input_va_val);  // second offset
+	int bit39_47 = PML4_1st_OFFSET(input_va_val);  // first offset
+	unsigned long long int SLPTPTR_1level;
+        unsigned long long int SLPTPTR_2level;
+        unsigned long long int SLPTPTR_3level;
+        unsigned long long int SLPTPTR_4level;
+
+	unsigned int *slp_addr_va = NULL;
+        unsigned int *slp_addr_2nd_va = NULL;
+        unsigned int *slp_addr_3rd_va = NULL;
+        unsigned int *slp_addr_4th_va = NULL;
+	int *start;
+
+	slp_addr_va = (unsigned int *)(0x17AA66000);
+
+	printf("input va: %#llx\n", input_va_val);
+	printf("page offset bit0_11: %#x\n", bit0_11);
+	printf("4th offset bit12_20: %#x\n", bit12_20);
+	printf("3rd offset bit21_29: %#x\n", bit21_29);
+	printf("2nd offset bit30_39: %#x\n", bit30_39);
+	printf("1st offset bit39_47: %#x\n", bit39_47);
+
+	start = (int *)mmap(slp_addr_va, SL_1st_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SLPTPTR_val);
+	if (start < 0)
+        {
+		printf("slp_addr_va mmap failed in %s\n", __func__);
+		return -1;
+        }
+
+        printf("===start walk neste second pml4 table structure===\n");
+	printf("1st offset: %#x, pointer val: 0x%08x%08x\n", bit39_47,
+			slp_addr_va[1 + INDEX_OFFSET(bit39_47)], slp_addr_va[0 + INDEX_OFFSET(bit39_47)]);
+
+        SLPTPTR_1level = (unsigned long long int)slp_addr_va[1 + INDEX_OFFSET(bit39_47)] << 32
+                        | slp_addr_va[0 + INDEX_OFFSET(bit39_47)];
+
+        if (munmap(slp_addr_va, SL_1st_MAP_SIZE) == -1)
+                printf("slp_addr_va munmap error\n");
+
+        if (PRESENT_BIT(SLPTPTR_1level) == 0)
+                goto entry_not_present;
+
+        SLPTPTR_1level >>= 12;
+        SLPTPTR_1level <<= 12;
+        printf("SLPTPTR_1level=0x%llx\n", SLPTPTR_1level);
+
+        if (SLPTPTR_1level == 0)
+                goto addr_0_err;
+
+        slp_addr_2nd_va = (unsigned int *)(0x18AA66000);
+
+        start = (int *)mmap(slp_addr_2nd_va, SL_2nd_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SLPTPTR_1level);
+	if (start < 0)
+        {
+		printf("slp_addr_2nd_va mmap failed in %s\n", __func__);
+		return -1;
+        }
+
+        printf("2nd offset: %#x, pointer val: 0x%08x%08x\n", bit30_39,
+              slp_addr_2nd_va[1 + INDEX_OFFSET(bit30_39)], slp_addr_2nd_va[0 + INDEX_OFFSET(bit30_39)]);
+
+        SLPTPTR_2level = (unsigned long long int)slp_addr_2nd_va[1 + INDEX_OFFSET(bit30_39)] << 32
+                        | slp_addr_2nd_va[0 + INDEX_OFFSET(bit30_39)];
+
+        if (munmap(slp_addr_2nd_va, SL_2nd_MAP_SIZE) == -1)
+                printf("slp_addr_2nd_va munmap error\n");
+
+        if (HUGEPAGE_BIT(SLPTPTR_2level) == 1)
+                goto GB_HUGEPAGE;
+        if (PRESENT_BIT(SLPTPTR_2level) == 0)
+                goto entry_not_present;
+
+        SLPTPTR_2level >>= 12;
+        SLPTPTR_2level <<= 12;
+        printf("SLPTPTR_2level=0x%llx\n", SLPTPTR_2level);
+
+        if (SLPTPTR_2level == 0)
+                goto addr_0_err;
+
+        slp_addr_3rd_va = (unsigned int *)(0x19AA66000);
+        start = (int *)mmap(slp_addr_3rd_va, SL_3rd_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SLPTPTR_2level);
+        if (start < 0)
+        {
+                printf("slp_addr_3rd_va mmap failed in %s\n", __func__);
+                return -1;
+        }
+
+        printf("3rd offset: %#x, pointer val: 0x%08x%08x\n", bit21_29,
+              slp_addr_3rd_va[1 + INDEX_OFFSET(bit21_29)], slp_addr_3rd_va[0 + INDEX_OFFSET(bit21_29)]);
+        SLPTPTR_3level = (unsigned long long int)slp_addr_3rd_va[1 + INDEX_OFFSET(bit21_29)] << 32
+                        | slp_addr_3rd_va[0 + INDEX_OFFSET(bit21_29)];
+
+        if (munmap(slp_addr_3rd_va, SL_3rd_MAP_SIZE) == -1)
+                printf("slp_addr_3rd_va munmap error\n");
+
+        if (HUGEPAGE_BIT(SLPTPTR_3level) == 1)
+                goto MB_HUGEPAGE;
+        if (PRESENT_BIT(SLPTPTR_3level) == 0)
+                goto entry_not_present;
+
+        SLPTPTR_3level >>= 12;
+        SLPTPTR_3level <<= 12;
+        printf("SLPTPTR_3level=0x%llx\n", SLPTPTR_3level);
+
+        if (SLPTPTR_3level == 0)
+                goto addr_0_err;
+
+        slp_addr_4th_va = (unsigned int *)(0x1aAA66000);
+        start = (int *)mmap(slp_addr_4th_va, SL_4th_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, SLPTPTR_3level);
+        if (start < 0)
+        {
+                printf("slp_addr_4th_va mmap failed in %s\n", __func__);
+                return -1;
+        }
+
+        printf("4th offset: %#x, pointer val: 0x%08x%08x\n", bit12_20,
+              slp_addr_4th_va[1 + INDEX_OFFSET(bit12_20)], slp_addr_4th_va[0 + INDEX_OFFSET(bit12_20)]);
+        SLPTPTR_4level = (unsigned long long int)slp_addr_4th_va[1 + INDEX_OFFSET(bit12_20)] << 32
+                        | slp_addr_4th_va[0 + INDEX_OFFSET(bit12_20)];
+
+        if (munmap(slp_addr_4th_va, SL_4th_MAP_SIZE) == -1)
+                printf("slp_addr_4th_va munmap errpr\n");
+
+        if (PRESENT_BIT(SLPTPTR_4level) == 0)
+                goto entry_not_present;
+
+        SLPTPTR_4level >>= 12;
+        SLPTPTR_4level <<=12;
+        printf("SLPTPTR_4level=0x%llx\n", SLPTPTR_4level);
+
+        if (SLPTPTR_4level == 0)
+                goto addr_0_err;
+
+
+        return SLPTPTR_4level;
+
+addr_0_err:
+        printf("this level addr pointer is 0!!\n");
+        return -2;
+
+entry_not_present:
+        printf("this entry not present\n");
+        return -3;
+
+GB_HUGEPAGE:
+        printf("Used 1GB Huge Page\n");
+        return SLPTPTR_2level;
+
+MB_HUGEPAGE:
+        printf("Used 2MB Huge Page\n");
+        return SLPTPTR_3level;
+}
+
+#define PAGE_MAP_SIZE  0xFFF
+
+unsigned long long int map_neste_flpa_get_flva(unsigned long long int flpa,
+                                               unsigned long long int input_va_val,
+                                               int fd, int level)
+{
+        int *start;
+        unsigned int *flpa_user_va = NULL;
+        unsigned long long int flva;
+
+        flpa_user_va = (unsigned int *)(0x1BA67000);
+        start = (int *)mmap(flpa_user_va, PAGE_MAP_SIZE, PROT_READ | PROT_WRITE, MAP_SHARED, fd, flpa);
+
+        int bit0_11 = PML4_PAGE_OFFSET(input_va_val);   // page offset
+	int bit12_20 = PML4_4th_OFFSET(input_va_val);  // forth offset
+	int bit21_29 = PML4_3rd_OFFSET(input_va_val);  // third offset
+	int bit30_39 = PML4_2nd_OFFSET(input_va_val);  // second offset
+	int bit39_47 = PML4_1st_OFFSET(input_va_val);  // first offset
+
+        if (level == 1)
+        {
+                printf("-$$-level=%d, 1st page table entry=0x%08x%08x\n",
+                       level, flpa_user_va[1 + INDEX_OFFSET(bit39_47)], flpa_user_va[0 + INDEX_OFFSET(bit39_47)]);
+
+                flva = (unsigned long long int)flpa_user_va[1 + INDEX_OFFSET(bit39_47)] << 32 |
+                        flpa_user_va[0 + INDEX_OFFSET(bit39_47)];
+
+        }
+        if (level == 2)
+        {
+                printf("-$$-level=%d, 2nd page table entry=0x%08x%08x\n",
+                       level, flpa_user_va[1 + INDEX_OFFSET(bit30_39)], flpa_user_va[0 + INDEX_OFFSET(bit30_39)]);
+
+                flva = (unsigned long long int)flpa_user_va[1 + INDEX_OFFSET(bit30_39)] << 32 |
+                        flpa_user_va[0 + INDEX_OFFSET(bit30_39)];
+        }
+        if (level == 3)
+        {
+                printf("-$$-level=%d, 3rd page table entry=0x%08x%08x\n",
+                       level, flpa_user_va[1 + INDEX_OFFSET(bit21_29)], flpa_user_va[0 + INDEX_OFFSET(bit21_29)]);
+
+                flva = (unsigned long long int)flpa_user_va[1 + INDEX_OFFSET(bit21_29)] << 32 |
+                        flpa_user_va[0 + INDEX_OFFSET(bit21_29)];
+        }
+        if (level == 4)
+        {
+                printf("-$$-level=%d, 4th page table entry=0x%08x%08x\n",
+                       level, flpa_user_va[1 + INDEX_OFFSET(bit12_20)], flpa_user_va[0 + INDEX_OFFSET(bit12_20)]);
+
+                flva = (unsigned long long int)flpa_user_va[1 + INDEX_OFFSET(bit12_20)] << 32 |
+                        flpa_user_va[0 + INDEX_OFFSET(bit12_20)];
+        }
+        if (level == 5)
+        {
+                printf("-$$-level=%d, page level, page table entry=0x%08x%08x\n",
+                       level, flpa_user_va[1 + INDEX_OFFSET(bit12_20)], flpa_user_va[0 + INDEX_OFFSET(bit12_20)]);
+
+                flva = (unsigned long long int)flpa_user_va[1 + INDEX_OFFSET(bit12_20)] << 32 |
+                        flpa_user_va[0 + INDEX_OFFSET(bit12_20)];
+        }
+
+        if (munmap(flpa_user_va, PAGE_MAP_SIZE) == -1)
+                printf("flpa_user_va munmap error\n");
+
+        return flva;
+}
+
 int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                             int pasid_val, int bus_num_val, int dev_num_val,
                             int func_num_val, unsigned long long rte_val)
@@ -427,7 +653,7 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                 SM_CTP <<= 12;
         }
 
-        else if (dev_num_val <= 0xFF && dev_num_val >= 0x10)
+        else if (dev_num_val <= 0x1F && dev_num_val >= 0x10)
         {
                 printf("dev_num >= 0x10(16) Using UCTP and SM Upper Context Table\n");
                 printf("Root Table Entry bus %#x Offset=%#x, [63-0]:0x%08x%08x [127-64]:0x%08x%08x\n",
@@ -466,18 +692,29 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                 return -1;
         }
 
-        int offset_sm_context = dev_num_val << 8 | func_num_val << 5;
-        printf("sm context entry dev:0x%x func:%d    [63-0]:0x%08x%08x\n",
-               dev_num_val, func_num_val, sm_cte_val_va[1 + offset_sm_context / 8], sm_cte_val_va[0 + offset_sm_context / 8]);
-        printf("sm context entry dev:0x%x func:%d  [127-64]:0x%08x%08x\n",
-               dev_num_val, func_num_val, sm_cte_val_va[3 + offset_sm_context / 8], sm_cte_val_va[2 + offset_sm_context / 8]);
-        printf("sm context entry dev:0x%x func:%d [191-128]:0x%08x%08x\n",
-               dev_num_val, func_num_val, sm_cte_val_va[5 + offset_sm_context / 8], sm_cte_val_va[4 + offset_sm_context / 8]);
-        printf("sm context entry dev:0x%x func:%d [255-192]:0x%08x%08x\n",
-               dev_num_val, func_num_val, sm_cte_val_va[7 + offset_sm_context / 8], sm_cte_val_va[6 + offset_sm_context / 8]);
+        int offset_sm_context = 0x0;
+        if (dev_num_val <= 0xFF && dev_num_val >= 0x10)
+        {
+                offset_sm_context = (dev_num_val - 0x10) << 8 | func_num_val << 5;
+                printf("offset_sm_context / 4 = %d\n", offset_sm_context / 4);
+        }
+        else if (dev_num_val <= 0xF && dev_num_val >= 0x0)
+        {
+                offset_sm_context = (dev_num_val) << 8 | func_num_val << 5;
+                printf("offset_sm_context / 4 = %d\n", offset_sm_context / 4);
+        }
 
-        PASIDDIRPTR = (unsigned long long int)sm_cte_val_va[1 + offset_sm_context / 8] << 32 |
-                                                sm_cte_val_va[0 + offset_sm_context / 8];
+        printf("sm context entry dev:0x%x func:%d    [63-0]:0x%08x%08x\n",
+               dev_num_val, func_num_val, sm_cte_val_va[1 + offset_sm_context / 4], sm_cte_val_va[0 + offset_sm_context / 4]);
+        printf("sm context entry dev:0x%x func:%d  [127-64]:0x%08x%08x\n",
+               dev_num_val, func_num_val, sm_cte_val_va[3 + offset_sm_context / 4], sm_cte_val_va[2 + offset_sm_context / 4]);
+        printf("sm context entry dev:0x%x func:%d [191-128]:0x%08x%08x\n",
+               dev_num_val, func_num_val, sm_cte_val_va[5 + offset_sm_context / 4], sm_cte_val_va[4 + offset_sm_context / 4]);
+        printf("sm context entry dev:0x%x func:%d [255-192]:0x%08x%08x\n",
+               dev_num_val, func_num_val, sm_cte_val_va[7 + offset_sm_context / 4], sm_cte_val_va[6 + offset_sm_context / 4]);
+
+        PASIDDIRPTR = (unsigned long long int)sm_cte_val_va[1 + offset_sm_context / 4] << 32 |
+                                                sm_cte_val_va[0 + offset_sm_context / 4];
 
         printf("PASIDDIRPTR=%#llx\n", PASIDDIRPTR);
 
@@ -554,7 +791,7 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                         printf("sm_pasidte_addr_va mmap failed in %s\n", __func__);
                         return -1;
                 }
-                printf("===Used Scalable Mode Pasod Entry===\n");
+                printf("===Used Scalable Mode Pasid Entry===\n");
                 printf("pasid entry pasid_val_0_5:%#x    [63-0]:0x%08x%08x\n", pasid_val_0_5,
                        sm_pasidte_addr_va[1 + PASID_INDEX(pasid_val_0_5)], sm_pasidte_addr_va[0 + PASID_INDEX(pasid_val_0_5)]);
                 printf("pasid entry pasid_val_0_5:%#x  [127-64]:0x%08x%08x\n", pasid_val_0_5,
@@ -603,6 +840,63 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                 {
                         printf("SLPTPTR=0x%llx\n", SLPTPTR);
                         ret = walk_page_structure_entry(SLPTPTR, guest_addr_val, fd);
+                }
+        }
+        else if (PGTT == 3)
+        {
+                SLPTPTR >>= 12;
+                SLPTPTR <<= 12;
+
+                FLPTPTR >>= 12;
+                FLPTPTR <<= 12;
+                FLPTPTR &= 0x7FFFFFFFFFFFFFFF;
+                if (FLPTPTR != 0)
+                {
+                        printf("---neste pml4 table---\n");
+                        printf("FLPTPTR=0x%llx\n", FLPTPTR);
+                        unsigned long long int FLPTPTR_pa_1 = 0x0;
+                        FLPTPTR_pa_1 = walk_neste_second_page_structure_entry(SLPTPTR, FLPTPTR, fd);
+                        printf("FLPTPTR_pa_1=0x%llx\n", FLPTPTR_pa_1);
+
+                        unsigned long long int flva_1 = 0x0;
+                        flva_1 = map_neste_flpa_get_flva(FLPTPTR_pa_1, guest_addr_val, fd, 1);
+                        flva_1 >>= 12;
+                        flva_1 <<= 12;
+                        flva_1 &= 0x7FFFFFFFFFFFFFFF;
+
+                        unsigned long long int FLPTPTR_pa_2 = 0x0;
+                        FLPTPTR_pa_2 = walk_neste_second_page_structure_entry(SLPTPTR, flva_1, fd);
+                        printf("FLPTPTR_pa_2=0x%llx\n", FLPTPTR_pa_2);
+
+                        unsigned long long int flva_2 = 0x0;
+                        flva_2 = map_neste_flpa_get_flva(FLPTPTR_pa_2, guest_addr_val, fd, 2);
+                        flva_2 >>= 12;
+                        flva_2 <<= 12;
+                        flva_2 &= 0x7FFFFFFFFFFFFFFF;
+
+                        unsigned long long int FLPTPTR_pa_3 = 0x0;
+                        FLPTPTR_pa_3 = walk_neste_second_page_structure_entry(SLPTPTR, flva_2, fd);
+                        printf("FLPTPTR_pa_3=0x%llx\n", FLPTPTR_pa_3);
+
+                        unsigned long long int flva_3 = 0x0;
+                        flva_3 = map_neste_flpa_get_flva(FLPTPTR_pa_3, guest_addr_val, fd, 3);
+                        flva_3 >>= 12;
+                        flva_3 <<= 12;
+                        flva_3 &= 0x7FFFFFFFFFFFFFFF;
+
+                        unsigned long long int FLPTPTR_pa_4 = 0x0;
+                        FLPTPTR_pa_4 = walk_neste_second_page_structure_entry(SLPTPTR, flva_3, fd);
+                        printf("FLPTPTR_pa_4=0x%llx\n", FLPTPTR_pa_4);
+
+                        unsigned long long int flva_4 = 0x0;
+                        flva_4 = map_neste_flpa_get_flva(FLPTPTR_pa_4, guest_addr_val, fd, 4);
+                        flva_4 >>= 12;
+                        flva_4 <<= 12;
+                        flva_4 &= 0x7FFFFFFFFFFFFFFF;
+
+                        unsigned long long int FLPTPTR_pa_page = 0x0;
+                        FLPTPTR_pa_page = walk_neste_second_page_structure_entry(SLPTPTR, flva_4, fd);
+                        printf("FLPPTPTR_pa_page=0x%llx  --$$--\n", FLPTPTR_pa_page);
                 }
         }
 
