@@ -718,11 +718,19 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
 
         printf("PASIDDIRPTR=%#llx\n", PASIDDIRPTR);
 
-        unsigned long long int rid_pasid_val = (unsigned long long int)sm_cte_val_va[3 + offset_sm_context / 8]  << 32 |
-                                                sm_cte_val_va[2 + offset_sm_context / 8];
+        unsigned long long int rid_pasid_val = (unsigned long long int)sm_cte_val_va[3 + offset_sm_context / 4]  << 32 |
+                                                sm_cte_val_va[2 + offset_sm_context / 4];
         rid_pasid_val &= 0xFFFFF;
         if (rid_pasid_val != 0)
+        {
                 printf("this device used RID_PASID, rid_pasid_val=0x%llx(%lld)\n", rid_pasid_val, rid_pasid_val);
+                if (pasid_val == 0x0)
+                {
+                        pasid_val = (int)rid_pasid_val;
+                        printf("used rid_pasid repalce pasid, pasid_val=rid_pasid_val=%x(%d)\n",
+                               pasid_val, pasid_val);
+                }
+        }
 
         if (PRESENT_BIT(PASIDDIRPTR) == 0)
         {
@@ -903,7 +911,7 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
         return ret;
 
 pasid_zero:
-        printf("input pasid is zero\n");
+        printf("input pasid is zero and no rid_pasid\n");
 
         return 0;
 }
