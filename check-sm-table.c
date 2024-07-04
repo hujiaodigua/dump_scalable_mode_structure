@@ -754,6 +754,11 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
         int pasid_val_6_19 = pasid_val >> 6;
 
         if (pasid_val_6_19 != 0)
+		printf("pasid_val_6_19 not zero!\n");
+	else
+		printf("psid_val_6_19 zero!\n");
+
+	if (pasid_val_6_19 < (1 << 21))
         {
                 start = (int *)mmap(sm_pasiddirte_addr_va, PASIDDIRTE_MAP_SIZE,
                                     PROT_READ | PROT_WRITE, MAP_SHARED, fd, PASIDDIRPTR);
@@ -769,6 +774,11 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                         sm_pasiddirte_addr_va[0 + PASIDDIR_INDEX(pasid_val_6_19)]);
 
         }
+	else
+	{
+		printf("psid val oversize!\n");
+		return 0;
+	}
 
         PASIDPTR = (unsigned long long int)sm_pasiddirte_addr_va[1 + PASIDDIR_INDEX(pasid_val_6_19)] << 32 |
                         sm_pasiddirte_addr_va[0 + PASIDDIR_INDEX(pasid_val_6_19)];
