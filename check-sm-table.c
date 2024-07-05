@@ -730,6 +730,10 @@ int walk_sm_structure_entry(int fd, unsigned long long int guest_addr_val,
                         printf("used rid_pasid repalce pasid, pasid_val=rid_pasid_val=%x(%d)\n",
                                pasid_val, pasid_val);
                 }
+		else
+		{
+			printf("input pasid !=0, walk table used input pasid=0x%x(%d)\n", pasid_val, pasid_val);
+		}
         }
 
         if (PRESENT_BIT(PASIDDIRPTR) == 0)
