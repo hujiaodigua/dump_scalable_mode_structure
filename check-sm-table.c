@@ -972,6 +972,12 @@ int main(int argc, char* argv[], char* envp[])
                 input_rte_addr = strtoll(argv[6], &ptr_rta, 16);
         printf("0x%llx\n", input_rte_addr);
 
+	if ((input_rte_addr & 0xfff) != 0)
+	{
+		printf("please input RTE base(RTA filed of RTA_ADDR_REG, bit[11-0] all zero)!!!\n");
+		return -1;
+	}
+
         file_device = open("/dev/mem", O_RDWR);
         if (file_device < 0)
         {
